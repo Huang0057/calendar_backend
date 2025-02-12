@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Calendar.API.Data;
+using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,6 +15,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+    });
 
 var app = builder.Build();
 
