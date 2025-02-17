@@ -3,6 +3,7 @@ using Calendar.API.DTOs.TodoDtos;
 using Calendar.API.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Query.Internal;
 
 
 namespace Calendar.API.Controllers
@@ -35,7 +36,7 @@ namespace Calendar.API.Controllers
             var todo = await _context.Todos
                 .Include(t => t.SubTasks)
                 .Include(t => t.TodoTags)
-                    .ThenInclude(tt => tt.Tag)
+                .ThenInclude(tt => tt.Tag)
                 .FirstOrDefaultAsync(t => t.Id == id);
 
             if (todo == null)
@@ -145,6 +146,8 @@ namespace Calendar.API.Controllers
         {
             var todo = await _context.Todos
                 .Include(t => t.TodoTags)
+                .ThenInclude(tt => tt.Tag)
+                .Include(t => t.SubTasks) 
                 .FirstOrDefaultAsync(t => t.Id == id);
 
             if (todo == null)
@@ -188,7 +191,8 @@ namespace Calendar.API.Controllers
             }
 
             await _context.SaveChangesAsync();
-            return NoContent();
+
+            return Ok(MapToDto(todo));
         }    
 
         [HttpDelete("{id}")]
