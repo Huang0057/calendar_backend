@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Calendar.API.Data;
 using System.Text.Json.Serialization;
+using Calendar.API.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,6 +11,16 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
+
+// 註冊 TodoService
+builder.Services.AddScoped<ITodoService, TodoService>();
+
+// 配置日誌服務
+builder.Services.AddLogging(logging =>
+{
+    logging.AddConsole();
+    logging.AddDebug();
+});
 
 // 加入基本服務
 builder.Services.AddControllers();
