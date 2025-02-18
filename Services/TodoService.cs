@@ -1,3 +1,4 @@
+using AutoMapper;
 using Calendar.API.Data;
 using Calendar.API.DTOs.TodoDtos;
 using Calendar.API.Models.Entities;
@@ -8,10 +9,12 @@ namespace Calendar.API.Services
     public class TodoService : ITodoService
     {
         private readonly ApplicationDbContext _context;
+        private readonly IMapper _mapper;
 
-        public TodoService(ApplicationDbContext context)
+        public TodoService(ApplicationDbContext context, IMapper mapper)
         {
             _context = context;
+            _mapper = mapper;
         }
 
         public async Task<IEnumerable<TodoResponseDto>> GetAllAsync()
@@ -135,30 +138,28 @@ namespace Calendar.API.Services
             return await GetByIdAsync(subTask.Id);
         }
 
-        public async Task<TodoResponseDto> UpdateAsync(int id, TodoUpdateDto dto)
+        public async Task<TodoResponseDto> UpdateAsync(int id, TodoUpdateDto todoDto)
         {
-            var todo = await _context.Todos
-                .FirstOrDefaultAsync(t => t.Id == id);
-
+            var todo = await _context.Todos.FindAsync(id);
             if (todo == null)
-                throw new KeyNotFoundException($"Todo with ID {id} not found.");
-
-            UpdateTodoProperties(todo, dto);
+                throw new KeyNotFoundException($"Todo with ID {id} not found");
+                
+            if (todoDto.Title != null)
+                todo.Title = todoDto.Title;
+            if (todoDto.Description != null)
+                todo.Description = todoDto.Description;
+            if (todoDto.Priority.HasValue)
+                todo.Priority = todoDto.Priority.Value;
+            if (todoDto.DueDate.HasValue)
+                todo.DueDate = todoDto.DueDate.Value;
+            if (todoDto.IsCompleted.HasValue)
+                todo.IsCompleted = todoDto.IsCompleted.Value;          
+                
                 
             todo.UpdatedAt = DateTime.UtcNow;
-            if (todo.IsCompleted && !todo.CompletedAt.HasValue)
-            {
-                todo.CompletedAt = DateTime.UtcNow;
-            }
-            else if (!todo.IsCompleted)
-            {
-                todo.CompletedAt = null;
-            }
-
             await _context.SaveChangesAsync();
-            return await GetByIdAsync(todo.Id);
+            return _mapper.Map<TodoResponseDto>(todo);
         }
-
         public async Task DeleteAsync(int id)
         {
             var todo = await _context.Todos
@@ -193,23 +194,6 @@ namespace Calendar.API.Services
             }
 
             _context.Todos.Remove(todo);
-        }
-
-        private void UpdateTodoProperties(Todo todo, TodoUpdateDto dto)
-        {
-            if (!string.IsNullOrWhiteSpace(dto.Title))
-            {
-                todo.Title = dto.Title.Trim();
-            }
-
-            if (dto.Description != null)
-            {
-                todo.Description = dto.Description.Trim();
-            }
-
-            todo.Priority = dto.Priority;
-            todo.DueDate = dto.DueDate;
-            todo.IsCompleted = dto.IsCompleted;
         }
 
         private void ValidateTodoCreate(TodoCreateDto dto)

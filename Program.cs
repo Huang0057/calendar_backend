@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Calendar.API.Data;
 using System.Text.Json.Serialization;
 using Calendar.API.Services;
+using Calendar.API.Mappings;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,6 +13,10 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(connectionString));
+
+// 加入 AutoMapper 服務
+builder.Services.AddAutoMapper(typeof(MappingProfile));
+
 
 // 註冊 TodoService
 builder.Services.AddScoped<ITodoService, TodoService>();
@@ -23,6 +29,7 @@ builder.Services.AddLogging(logging =>
 });
 
 // 加入基本服務
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
