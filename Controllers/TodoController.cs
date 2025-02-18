@@ -1,10 +1,6 @@
-using Calendar.API.Data;
 using Calendar.API.DTOs.TodoDtos;
-using Calendar.API.Models.Entities;
+using Calendar.API.Services;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Query.Internal;
-
 
 namespace Calendar.API.Controllers
 {
@@ -12,207 +8,153 @@ namespace Calendar.API.Controllers
     [Route("api/[controller]")]
     public class TodoController : ControllerBase
     {
-        private readonly ApplicationDbContext _context;
+        private readonly ITodoService _todoService;
+        private readonly ILogger<TodoController> _logger;
 
-        public TodoController(ApplicationDbContext context)
+        public TodoController(ITodoService todoService, ILogger<TodoController> logger)
         {
-            _context = context;
+            _todoService = todoService;
+            _logger = logger;
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Todo>>> GetTodos()
-        {        
-            return await _context.Todos
-                .Include(t => t.SubTasks)
-                .Include(t => t.TodoTags)
-                    .ThenInclude(tt => tt.Tag)
-                .Where(t => t.ParentId == null)
-                .ToListAsync();
+        public async Task<ActionResult<IEnumerable<TodoResponseDto>>> GetTodos()
+        {
+            try
+            {
+                var todos = await _todoService.GetAllAsync();
+                return Ok(todos);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting all todos");
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
         }
 
         [HttpGet("{id}")]
         public async Task<ActionResult<TodoResponseDto>> GetTodo(int id)
         {
-            var todo = await _context.Todos
-                .Include(t => t.SubTasks)
-                .Include(t => t.TodoTags)
-                .ThenInclude(tt => tt.Tag)
-                .FirstOrDefaultAsync(t => t.Id == id);
-
-            if (todo == null)
+            try
             {
-                return NotFound();
+                var todo = await _todoService.GetByIdAsync(id);
+                return Ok(todo);
             }
-
-            return MapToDto(todo);
-        }
-
-        private TodoResponseDto MapToDto(Todo todo)
-        {
-            return new TodoResponseDto
+            catch (KeyNotFoundException ex)
             {
-                Id = todo.Id,
-                Title = todo.Title,
-                Description = todo.Description,
-                IsCompleted = todo.IsCompleted,
-                CreatedAt = todo.CreatedAt,
-                UpdatedAt = todo.UpdatedAt,
-                CompletedAt = todo.CompletedAt,
-                DueDate = todo.DueDate,
-                Priority = todo.Priority,
-                ParentId = todo.ParentId,
-                SubTasks = todo.SubTasks.Select(MapToDto).ToList()
-            };
+                _logger.LogWarning(ex, "Todo with ID {TodoId} not found", id);
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while getting todo {TodoId}", id);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] TodoCreateDto todoDto)
+        public async Task<ActionResult<TodoResponseDto>> CreateTodo([FromBody] TodoCreateDto todoDto)
         {
-            if (!ModelState.IsValid)
+            try
             {
-                return BadRequest(ModelState);
-            }
-
-            if (string.IsNullOrWhiteSpace(todoDto.Title))
-            {
-                ModelState.AddModelError("Title", "標題不能為空");
-                return BadRequest(ModelState);
-            }
-
-
-            var todo = new Todo
-            {
-                Title = todoDto.Title.Trim(),
-                Description = todoDto.Description?.Trim(),
-                Priority = todoDto.Priority,
-                DueDate = todoDto.DueDate,
-                IsCompleted = false,
-                CreatedAt = DateTime.UtcNow
-            };
-
-            _context.Todos.Add(todo);
-            await _context.SaveChangesAsync();
-           
-            if (todoDto.TagIds?.Any() == true)
-            {
-                foreach (var tagId in todoDto.TagIds)
+                if (!ModelState.IsValid)
                 {
-                    var tag = await _context.Tags.FindAsync(tagId);
-                    if (tag != null)
-                    {
-                        var todoTag = new TodoTag
-                        {
-                            TodoId = todo.Id,
-                            TagId = tagId,
-                            Todo = todo,
-                            Tag = tag
-                        };
-                        _context.TodoTags.Add(todoTag);
-                    }
+                    return BadRequest(ModelState);
                 }
-                await _context.SaveChangesAsync();
-            }
 
-            return CreatedAtAction(nameof(GetTodo), new { id = todo.Id }, todo);
+                var createdTodo = await _todoService.CreateAsync(todoDto);
+                return CreatedAtAction(nameof(GetTodo), new { id = createdTodo.Id }, createdTodo);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid todo creation attempt");
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while creating todo");
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
         }
+
         [HttpPost("{parentId}/subtasks")]
-        public async Task<IActionResult> CreateSubTask(int parentId, [FromBody] TodoCreateDto todoDto)
+        public async Task<ActionResult<TodoResponseDto>> CreateSubTask(int parentId, [FromBody] TodoCreateDto todoDto)
         {
-            var parentTodo = await _context.Todos.FindAsync(parentId);
-            if (parentTodo == null)
+            try
             {
-                return NotFound("找不到指定的父層待辦事項");
+                if (!ModelState.IsValid)
+                {
+                    return BadRequest(ModelState);
+                }
+
+                var createdSubTask = await _todoService.CreateSubTaskAsync(parentId, todoDto);
+                return CreatedAtAction(nameof(GetTodo), new { id = createdSubTask.Id }, createdSubTask);
             }
-
-            var subTask = new Todo
+            catch (KeyNotFoundException ex)
             {
-                Title = todoDto.Title.Trim(),
-                Description = todoDto.Description?.Trim(),
-                Priority = todoDto.Priority,
-                DueDate = todoDto.DueDate,
-                IsCompleted = false,
-                CreatedAt = DateTime.UtcNow,
-                ParentId = parentId
-            };
-
-            _context.Todos.Add(subTask);
-            await _context.SaveChangesAsync();
-
-            return CreatedAtAction(nameof(GetTodo), new { id = subTask.Id }, subTask);
+                _logger.LogWarning(ex, "Parent todo with ID {ParentId} not found", parentId);
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid subtask creation attempt");
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while creating subtask");
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateTodo(int id, [FromBody] TodoUpdateDto todoDto)
+        public async Task<ActionResult<TodoResponseDto>> UpdateTodo(int id, [FromBody] TodoUpdateDto todoDto)
         {
-            var todo = await _context.Todos
-                .Include(t => t.TodoTags)
-                .ThenInclude(tt => tt.Tag)
-                .Include(t => t.SubTasks) 
-                .FirstOrDefaultAsync(t => t.Id == id);
-
-            if (todo == null)
+            try
             {
-                return NotFound();
-            }
-
-            if (!string.IsNullOrWhiteSpace(todoDto.Title))
-            {
-                todo.Title = todoDto.Title.Trim();
-            }
-
-            if (todoDto.Description != null)
-            {
-                todo.Description = todoDto.Description.Trim();
-            }
-
-            todo.Priority = todoDto.Priority;
-            todo.DueDate = todoDto.DueDate;
-            todo.IsCompleted = todoDto.IsCompleted;
-
-            if (todoDto.TagIds != null)
-            {
-                _context.TodoTags.RemoveRange(todo.TodoTags);
-
-                foreach (var tagId in todoDto.TagIds)
+                if (!ModelState.IsValid)
                 {
-                    var tag = await _context.Tags.FindAsync(tagId);
-                    if (tag != null)
-                    {
-                        var todoTag = new TodoTag
-                        {
-                            TodoId = todo.Id,
-                            TagId = tagId,
-                            Todo = todo,
-                            Tag = tag
-                        };
-                        _context.TodoTags.Add(todoTag);
-                    }
+                    return BadRequest(ModelState);
                 }
+
+                var updatedTodo = await _todoService.UpdateAsync(id, todoDto);
+                return Ok(updatedTodo);
             }
-
-            await _context.SaveChangesAsync();
-
-            return Ok(MapToDto(todo));
-        }    
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Todo with ID {TodoId} not found for update", id);
+                return NotFound(ex.Message);
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid todo update attempt");
+                return BadRequest(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while updating todo {TodoId}", id);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
+        }
 
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteTodo(int id)
         {
-            var todo = await _context.Todos.FindAsync(id);
-            if (todo == null)
+            try
             {
-                return NotFound();
+                await _todoService.DeleteAsync(id);
+                return NoContent();
             }
-
-            _context.Todos.Remove(todo);
-            await _context.SaveChangesAsync();
-
-            return NoContent();
-        }
-
-        private bool TodoExists(int id)
-        {
-            return _context.Todos.Any(e => e.Id == id);
+            catch (KeyNotFoundException ex)
+            {
+                _logger.LogWarning(ex, "Todo with ID {TodoId} not found for deletion", id);
+                return NotFound(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error occurred while deleting todo {TodoId}", id);
+                return StatusCode(500, "An error occurred while processing your request.");
+            }
         }
     }
 }
