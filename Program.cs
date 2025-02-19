@@ -3,6 +3,7 @@ using Calendar.API.Data;
 using System.Text.Json.Serialization;
 using Calendar.API.Services;
 using Calendar.API.Mappings;
+using Calendar.API.Repositories;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,9 +18,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // 加入 AutoMapper 服務
 builder.Services.AddAutoMapper(typeof(TodoProfile));
 
-
 // 註冊 TodoService
 builder.Services.AddScoped<ITodoService, TodoService>();
+
+builder.Services.AddScoped<ITodoRepository, TodoRepository>();
+builder.Services.AddScoped<ITagRepository, TagRepository>();
 
 // 配置日誌服務
 builder.Services.AddLogging(logging =>
