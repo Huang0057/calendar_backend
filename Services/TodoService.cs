@@ -1,4 +1,5 @@
 using AutoMapper;
+using AutoMapper.QueryableExtensions;
 using Calendar.API.Data;
 using Calendar.API.DTOs.TodoDtos;
 using Calendar.API.Models.Entities;
@@ -23,32 +24,7 @@ namespace Calendar.API.Services
                 .AsNoTracking()
                 .Include(t => t.SubTasks)
                 .Where(t => t.ParentId == null)
-                .Select(t => new TodoResponseDto
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    IsCompleted = t.IsCompleted,
-                    CreatedAt = t.CreatedAt,
-                    UpdatedAt = t.UpdatedAt,
-                    CompletedAt = t.CompletedAt,
-                    DueDate = t.DueDate,
-                    Priority = t.Priority,
-                    ParentId = t.ParentId,
-                    SubTasks = t.SubTasks.Select(s => new TodoResponseDto
-                    {
-                        Id = s.Id,
-                        Title = s.Title,
-                        Description = s.Description,
-                        IsCompleted = s.IsCompleted,
-                        CreatedAt = s.CreatedAt,
-                        UpdatedAt = s.UpdatedAt,
-                        CompletedAt = s.CompletedAt,
-                        DueDate = s.DueDate,
-                        Priority = s.Priority,
-                        ParentId = s.ParentId
-                    }).ToList()
-                })
+                .ProjectTo<TodoResponseDto>(_mapper.ConfigurationProvider)
                 .ToListAsync();
         }
 
@@ -57,32 +33,7 @@ namespace Calendar.API.Services
             var todo = await _context.Todos
                 .AsNoTracking()
                 .Include(t => t.SubTasks)
-                .Select(t => new TodoResponseDto
-                {
-                    Id = t.Id,
-                    Title = t.Title,
-                    Description = t.Description,
-                    IsCompleted = t.IsCompleted,
-                    CreatedAt = t.CreatedAt,
-                    UpdatedAt = t.UpdatedAt,
-                    CompletedAt = t.CompletedAt,
-                    DueDate = t.DueDate,
-                    Priority = t.Priority,
-                    ParentId = t.ParentId,
-                    SubTasks = t.SubTasks.Select(s => new TodoResponseDto
-                    {
-                        Id = s.Id,
-                        Title = s.Title,
-                        Description = s.Description,
-                        IsCompleted = s.IsCompleted,
-                        CreatedAt = s.CreatedAt,
-                        UpdatedAt = s.UpdatedAt,
-                        CompletedAt = s.CompletedAt,
-                        DueDate = s.DueDate,
-                        Priority = s.Priority,
-                        ParentId = s.ParentId
-                    }).ToList()
-                })
+                .ProjectTo<TodoResponseDto>(_mapper.ConfigurationProvider)
                 .FirstOrDefaultAsync(t => t.Id == id);
 
             if (todo == null)
@@ -95,16 +46,10 @@ namespace Calendar.API.Services
         {
             ValidateTodoCreate(dto);
 
-            var todo = new Todo
-            {
-                Title = dto.Title.Trim(),
-                Description = dto.Description?.Trim(),
-                Priority = dto.Priority,
-                DueDate = dto.DueDate,
-                IsCompleted = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
+            var todo = _mapper.Map<Todo>(dto);
+            todo.IsCompleted = false;
+            todo.CreatedAt = DateTime.UtcNow;
+            todo.UpdatedAt = DateTime.UtcNow;
 
             _context.Todos.Add(todo);
             await _context.SaveChangesAsync();
@@ -120,17 +65,11 @@ namespace Calendar.API.Services
 
             ValidateTodoCreate(dto);
 
-            var subTask = new Todo
-            {
-                Title = dto.Title.Trim(),
-                Description = dto.Description?.Trim(),
-                Priority = dto.Priority,
-                DueDate = dto.DueDate,
-                IsCompleted = false,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow,
-                ParentId = parentId
-            };
+            var subTask = _mapper.Map<Todo>(dto);
+            subTask.IsCompleted = false;
+            subTask.CreatedAt = DateTime.UtcNow;
+            subTask.UpdatedAt = DateTime.UtcNow;
+            subTask.ParentId = parentId;
 
             _context.Todos.Add(subTask);
             await _context.SaveChangesAsync();
@@ -143,23 +82,14 @@ namespace Calendar.API.Services
             var todo = await _context.Todos.FindAsync(id);
             if (todo == null)
                 throw new KeyNotFoundException($"Todo with ID {id} not found");
-                
-            if (todoDto.Title != null)
-                todo.Title = todoDto.Title;
-            if (todoDto.Description != null)
-                todo.Description = todoDto.Description;
-            if (todoDto.Priority.HasValue)
-                todo.Priority = todoDto.Priority.Value;
-            if (todoDto.DueDate.HasValue)
-                todo.DueDate = todoDto.DueDate.Value;
-            if (todoDto.IsCompleted.HasValue)
-                todo.IsCompleted = todoDto.IsCompleted.Value;          
-                
-                
+
+            _mapper.Map(todoDto, todo);
             todo.UpdatedAt = DateTime.UtcNow;
+            
             await _context.SaveChangesAsync();
             return _mapper.Map<TodoResponseDto>(todo);
         }
+
         public async Task DeleteAsync(int id)
         {
             var todo = await _context.Todos
