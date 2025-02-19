@@ -1,5 +1,6 @@
 using Calendar.API.Data;
 using Calendar.API.Models.Entities;
+using Calendar.API.Exceptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace Calendar.API.Repositories
@@ -217,12 +218,7 @@ namespace Calendar.API.Repositories
             }
         }
     }
-        public class RepositoryException : Exception
-        {
-            public RepositoryException(string message) : base(message) { }
-            public RepositoryException(string message, Exception innerException) 
-                : base(message, innerException) { }
-        }
+
 }
 
 
