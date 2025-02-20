@@ -2,6 +2,7 @@ using AutoMapper;
 using Calendar.API.DTOs.TodoDtos;
 using Calendar.API.Models.Entities;
 using Calendar.API.Repositories;
+using Calendar.API.Exceptions;
 
 namespace Calendar.API.Services
 {
@@ -144,14 +145,6 @@ namespace Calendar.API.Services
             }
 
             await _todoRepository.DeleteAsync(id);
-        }
-    }
-
-    [Serializable]
-    public class BusinessValidationException : Exception
-    {
-        public BusinessValidationException(string message) : base(message)
-        {
         }
     }
 }
