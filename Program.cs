@@ -2,9 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Calendar.API.Data;
 using System.Text.Json.Serialization;
 using Calendar.API.Services;
+using Calendar.API.Services.Interfaces;
 using Calendar.API.Mappings;
 using Calendar.API.Repositories;
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +20,7 @@ builder.Services.AddAutoMapper(typeof(TodoProfile));
 
 // 註冊 TodoService
 builder.Services.AddScoped<ITodoService, TodoService>();
+builder.Services.AddScoped<ITagService, TagService>();
 
 builder.Services.AddScoped<ITodoRepository, TodoRepository>();
 builder.Services.AddScoped<ITagRepository, TagRepository>();
