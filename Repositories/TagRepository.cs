@@ -83,11 +83,12 @@ namespace Calendar.API.Repositories
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                await _tags.AddAsync(tag);
+                tag.Id = 0;
+                var entry = await _tags.AddAsync(tag);
                 await _context.SaveChangesAsync();
                 await transaction.CommitAsync();
 
-                return tag;
+                return entry.Entity;
             }
             catch (Exception ex)
             {

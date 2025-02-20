@@ -63,6 +63,12 @@ namespace Calendar.API.Services
             }
         }
 
+        private async Task<int> GenerateNextIdAsync()
+        {
+            var tags = await _tagRepository.GetAllAsync();
+            return tags.Any() ? tags.Max(t => t.Id) + 1 : 1;
+        }
+
         public async Task<Tag> CreateTagAsync(Tag tag)
         {
             if (tag == null)
@@ -83,6 +89,9 @@ namespace Calendar.API.Services
                     throw new DuplicateEntityException($"Tag with name '{tag.Name}' already exists");
                 }
 
+                // 自動生成 ID
+                tag.Id = await GenerateNextIdAsync();
+
                 return await _tagRepository.AddAsync(tag);
             }
             catch (RepositoryException ex)
@@ -90,7 +99,6 @@ namespace Calendar.API.Services
                 throw new ServiceException("Failed to create tag", ex);
             }
         }
-
         public async Task UpdateTagAsync(Tag tag)
         {
             if (tag == null)

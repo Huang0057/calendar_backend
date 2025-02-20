@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Calendar.API.Models.Entities;
 using Calendar.API.Services.Interfaces;
 using Calendar.API.Exceptions;
+using Calendar.API.DTOs.TagDtos;
 
 namespace Calendar.API.Controllers
 {
@@ -18,13 +19,42 @@ namespace Calendar.API.Controllers
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
+        private static TagDto ToDto(Tag tag)
+        {
+            return new TagDto
+            {
+                Id = tag.Id,
+                Name = tag.Name,
+                Color = tag.Color
+            };
+        }
+
+        private static Tag ToEntity(CreateTagDto dto)
+        {
+            return new Tag
+            {
+                Name = dto.Name,
+                Color = dto.Color
+            };
+        }
+
+        private static Tag ToEntity(UpdateTagDto dto, int id)
+        {
+            return new Tag
+            {
+                Id = id,
+                Name = dto.Name,
+                Color = dto.Color
+            };
+        }
+
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Tag>>> GetAllTags()
+        public async Task<ActionResult<IEnumerable<TagDto>>> GetAllTags()
         {
             try
             {
                 var tags = await _tagService.GetAllTagsAsync();
-                return Ok(tags);
+                return Ok(tags.Select(ToDto));
             }
             catch (ServiceException ex)
             {
@@ -34,12 +64,12 @@ namespace Calendar.API.Controllers
         }
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<Tag>> GetTagById(int id)
+        public async Task<ActionResult<TagDto>> GetTagById(int id)
         {
             try
             {
                 var tag = await _tagService.GetTagByIdAsync(id);
-                return Ok(tag);
+                return Ok(ToDto(tag));
             }
             catch (EntityNotFoundException ex)
             {
@@ -54,12 +84,12 @@ namespace Calendar.API.Controllers
         }
 
         [HttpGet("name/{name}")]
-        public async Task<ActionResult<Tag>> GetTagByName(string name)
+        public async Task<ActionResult<TagDto>> GetTagByName(string name)
         {
             try
             {
                 var tag = await _tagService.GetTagByNameAsync(name);
-                return Ok(tag);
+                return Ok(ToDto(tag));
             }
             catch (ArgumentException ex)
             {
@@ -79,12 +109,19 @@ namespace Calendar.API.Controllers
         }
 
         [HttpPost]
-        public async Task<ActionResult<Tag>> CreateTag([FromBody] Tag tag)
+        public async Task<ActionResult<TagDto>> CreateTag([FromBody] CreateTagDto createTagDto)
         {
             try
             {
+                var tag = ToEntity(createTagDto);
                 var createdTag = await _tagService.CreateTagAsync(tag);
-                return CreatedAtAction(nameof(GetTagById), new { id = createdTag.Id }, createdTag);
+                var createdTagDto = ToDto(createdTag);
+                
+                return CreatedAtAction(
+                    nameof(GetTagById),
+                    new { id = createdTagDto.Id },
+                    createdTagDto
+                );
             }
             catch (ArgumentNullException ex)
             {
@@ -98,7 +135,7 @@ namespace Calendar.API.Controllers
             }
             catch (DuplicateEntityException ex)
             {
-                _logger.LogWarning(ex, "Attempted to create duplicate tag: {Name}", tag.Name);
+                _logger.LogWarning(ex, "Attempted to create duplicate tag: {Name}", createTagDto.Name);
                 return Conflict(ex.Message);
             }
             catch (ServiceException ex)
@@ -109,15 +146,11 @@ namespace Calendar.API.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> UpdateTag(int id, [FromBody] Tag tag)
+        public async Task<IActionResult> UpdateTag(int id, [FromBody] UpdateTagDto updateTagDto)
         {
-            if (id != tag.Id)
-            {
-                return BadRequest("Tag ID mismatch");
-            }
-
             try
             {
+                var tag = ToEntity(updateTagDto, id);
                 await _tagService.UpdateTagAsync(tag);
                 return NoContent();
             }
@@ -138,7 +171,7 @@ namespace Calendar.API.Controllers
             }
             catch (DuplicateEntityException ex)
             {
-                _logger.LogWarning(ex, "Attempted to update to duplicate tag name: {Name}", tag.Name);
+                _logger.LogWarning(ex, "Attempted to update to duplicate tag name: {Name}", updateTagDto.Name);
                 return Conflict(ex.Message);
             }
             catch (ServiceException ex)
