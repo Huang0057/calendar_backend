@@ -1,4 +1,5 @@
-using Calendar.API.Common.Enums ;
+using Calendar.API.Common.Enums;
+using Calendar.API.DTOs.TagDtos;
 
 namespace Calendar.API.DTOs.TodoDtos
 {
@@ -14,6 +15,7 @@ namespace Calendar.API.DTOs.TodoDtos
         public DateTime? DueDate { get; set; }
         public Priority Priority { get; set; }
         public int? ParentId { get; set; }
+        public List<TagDto> Tags { get; set; } = new();
         public List<TodoResponseDto> SubTasks { get; set; } = new();
     }
 }

@@ -22,10 +22,12 @@ namespace Calendar.API.Repositories
             try
             {
                 return await _todos
-                    .AsNoTracking()  // 提高性能，因為我們只是讀取數據
-                    .Include(t => t.SubTasks)  // 預加載Subtask
-                    .Where(t => t.ParentId == null)  // 只獲取RootTodo
-                    .OrderByDescending(t => t.CreatedAt)  // 按建立時間排序
+                    .AsNoTracking()
+                    .Include(t => t.SubTasks)
+                    .Include(t => t.TodoTags)
+                        .ThenInclude(tt => tt.Tag)
+                    .Where(t => t.ParentId == null)
+                    .OrderByDescending(t => t.CreatedAt)
                     .ToListAsync();
             }
             catch (Exception ex)
@@ -59,6 +61,8 @@ namespace Calendar.API.Repositories
                 var todo = await _todos
                     .AsNoTracking()
                     .Include(t => t.SubTasks)
+                    .Include(t => t.TodoTags)
+                        .ThenInclude(tt => tt.Tag)
                     .FirstOrDefaultAsync(t => t.Id == id);
 
                 if (todo == null)
@@ -81,6 +85,8 @@ namespace Calendar.API.Repositories
             {
                 var todo = await _todos
                     .Include(t => t.SubTasks)
+                    .Include(t => t.TodoTags)  
+                        .ThenInclude(tt => tt.Tag)  
                     .FirstOrDefaultAsync(t => t.Id == id);
 
                 if (todo == null)
@@ -107,11 +113,26 @@ namespace Calendar.API.Repositories
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 設置建立和更新時間
                 var now = DateTime.UtcNow;
                 todo.CreatedAt = now;
                 todo.UpdatedAt = now;
-                
+
+                // 如果有 TodoTags，先驗證所有的 Tag 是否存在
+                if (todo.TodoTags.Any())
+                {
+                    var tags = todo.TodoTags.Select(tt => tt.Tag).ToList();
+                    todo.TodoTags.Clear();
+                    
+                    foreach (var tag in tags)
+                    {
+                        todo.TodoTags.Add(new TodoTag
+                        {
+                            Todo = todo,
+                            Tag = tag
+                        });
+                    }
+                }                
+
                 await _todos.AddAsync(todo);
                 await SaveChangesAsync();
                 await transaction.CommitAsync();
@@ -124,6 +145,7 @@ namespace Calendar.API.Repositories
                 throw new RepositoryException("Error creating todo", ex);
             }
         }
+
         public async Task UpdateAsync(Todo todo)
         {
             if (todo == null)
@@ -134,15 +156,39 @@ namespace Calendar.API.Repositories
             await using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                // 檢查實體是否存在
-                if (!await ExistsAsync(todo.Id))
+                var existingTodo = await _todos
+                    .Include(t => t.TodoTags)
+                    .ThenInclude(tt => tt.Tag)
+                    .FirstOrDefaultAsync(t => t.Id == todo.Id);
+
+                if (existingTodo == null)
                 {
                     throw new KeyNotFoundException($"Todo with ID {todo.Id} not found");
                 }
 
-                todo.UpdatedAt = DateTime.UtcNow;
-                _todos.Update(todo);
-                
+                // 1. 更新基本屬性
+                existingTodo.Title = todo.Title;
+                existingTodo.Description = todo.Description;
+                existingTodo.IsCompleted = todo.IsCompleted;
+                existingTodo.DueDate = todo.DueDate;
+                existingTodo.Priority = todo.Priority;
+                existingTodo.UpdatedAt = todo.UpdatedAt;
+                existingTodo.CompletedAt = todo.CompletedAt;
+
+                // 2. 更新標籤關聯
+                // 先移除所有現有的關聯
+                var existingTags = existingTodo.TodoTags.ToList();
+                foreach (var tag in existingTags)
+                {
+                    _context.Set<TodoTag>().Remove(tag);
+                }
+
+                // 添加新的關聯
+                foreach (var todoTag in todo.TodoTags)
+                {
+                    _context.Set<TodoTag>().Add(todoTag);
+                }
+
                 await SaveChangesAsync();
                 await transaction.CommitAsync();
             }
@@ -151,8 +197,8 @@ namespace Calendar.API.Repositories
                 await transaction.RollbackAsync();
                 throw new RepositoryException($"Error updating todo with ID {todo.Id}", ex);
             }
-        }
-
+        }        
+        
         // 遞迴刪除Todo及其Subtasks
         public async Task DeleteAsync(int id)
         {
