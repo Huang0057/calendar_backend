@@ -1,0 +1,26 @@
+# Git 相關
+.git
+.gitignore
+.gitattributes
+
+# 構建輸出
+bin/
+obj/
+
+# 開發環境文件
+*.user
+*.suo
+*.vs
+.vscode/
+.idea/
+
+# 本地環境文件
+appsettings.Development.json
+*.local.json
+
+# 日誌文件
+logs/
+*.log
+
+# 測試文件
+[Tt]est*/

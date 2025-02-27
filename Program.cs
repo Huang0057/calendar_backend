@@ -8,11 +8,27 @@ using Calendar.API.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 加入資料庫服務
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") 
-    ?? throw new InvalidOperationException("找不到連接字串 'DefaultConnection'");
+// 加入資料庫服務 - 簡化為只使用配置中的連接字串
+// 決定使用哪個連接字串
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
+// 檢查是否在 Docker 環境中 (通過環境變數判斷)
+var dockerConnectionString = builder.Configuration.GetConnectionString("DockerConnection") ??
+                            Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection");
+
+// 如果在 Docker 中，則使用 Docker 的連接字串
+if (!string.IsNullOrEmpty(dockerConnectionString))
+{
+    connectionString = dockerConnectionString;
+    Console.WriteLine("使用 Docker 連接字串");
+}
+else
+{
+    Console.WriteLine("使用本地開發連接字串");
+}
+
+// 添加 DbContext
+builder.Services.AddDbContext<ApplicationDbContext>(options => 
     options.UseSqlServer(connectionString));
 
 // 加入 AutoMapper 服務
@@ -33,7 +49,6 @@ builder.Services.AddLogging(logging =>
 });
 
 // 加入基本服務
-
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -45,12 +60,33 @@ builder.Services.AddControllers()
 
 var app = builder.Build();
 
-// 配置開發環境
-if (app.Environment.IsDevelopment())
+// 確保資料庫已創建並應用遷移
+using (var scope = app.Services.CreateScope())
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    var services = scope.ServiceProvider;
+    try
+    {
+        var context = services.GetRequiredService<ApplicationDbContext>();
+        
+        // 使用 context.Database.EnsureCreated() 確保資料庫已創建
+        context.Database.EnsureCreated();
+        
+        // 或者使用 Migrate() 應用遷移（如果有）
+        // context.Database.Migrate();
+        
+        Console.WriteLine("資料庫初始化成功");
+    }
+    catch (Exception ex)
+    {
+        var logger = services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "資料庫初始化時發生錯誤");
+        Console.WriteLine($"資料庫初始化錯誤: {ex.Message}");
+    }
 }
+
+// 在所有環境中啟用 Swagger
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
