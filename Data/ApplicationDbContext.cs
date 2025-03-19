@@ -8,12 +8,12 @@ namespace Calendar.API.Data
         public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : base(options)
         {
         }
-        
+
         public DbSet<Todo> Todos { get; set; }
         public DbSet<Tag> Tags { get; set; }
         public DbSet<TodoTag> TodoTags { get; set; }
         
-        // 新增的會員系統相關 DbSet 
+        // 會員系統資料表
         public DbSet<User> Users { get; set; }
         public DbSet<RefreshToken> RefreshTokens { get; set; }
         public DbSet<UserSetting> UserSettings { get; set; }
@@ -21,7 +21,8 @@ namespace Calendar.API.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
-                        
+            
+            // TodoTag 關聯
             modelBuilder.Entity<TodoTag>()
                 .HasKey(tt => new { tt.TodoId, tt.TagId });
 
@@ -35,6 +36,7 @@ namespace Calendar.API.Data
                 .WithMany(t => t.TodoTags)
                 .HasForeignKey(tt => tt.TagId);
             
+            // Todo 父子關聯
             modelBuilder.Entity<Todo>()
                 .HasOne(t => t.Parent)
                 .WithMany(t => t.SubTasks)
@@ -42,15 +44,15 @@ namespace Calendar.API.Data
                 .IsRequired(false)
                 .OnDelete(DeleteBehavior.Restrict);
             
-            // 修改 Todo 實體添加使用者關聯
+            // 明確且正確的 Todo-User 關聯
             modelBuilder.Entity<Todo>()
-                .HasOne<User>()
+                .HasOne(t => t.User)
                 .WithMany(u => u.Todos)
                 .HasForeignKey(t => t.UserId)
-                .OnDelete(DeleteBehavior.Cascade)
-                .IsRequired();
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.SetNull);
             
-            // 使用者相關配置
+            // 使用者相關索引
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)
                 .IsUnique();
@@ -59,10 +61,12 @@ namespace Calendar.API.Data
                 .HasIndex(u => u.Email)
                 .IsUnique();
             
+            // UserSetting 索引
             modelBuilder.Entity<UserSetting>()
                 .HasIndex(us => new { us.UserId, us.Key })
                 .IsUnique();
             
+            // RefreshToken 索引
             modelBuilder.Entity<RefreshToken>()
                 .HasIndex(rt => rt.Token)
                 .IsUnique();
