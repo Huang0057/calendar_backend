@@ -21,10 +21,14 @@ namespace Calendar.API.Models.Entities
         public Priority Priority { get; set; }
         public int? ParentId { get; set; }
         
+        // 新增: 使用者關聯
+        public int UserId { get; set; }
+        
         // Navigation properties
         public Todo? Parent { get; set; }
         public ICollection<Todo> SubTasks { get; set; }
         public ICollection<TodoTag> TodoTags { get; set; }
+        public User User { get; set; } = null!;
     }
 }
 
