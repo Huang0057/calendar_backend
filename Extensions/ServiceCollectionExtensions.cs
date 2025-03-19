@@ -1,46 +1,98 @@
-namespace Calendar.API.Exceptions
+// Extensions/ApplicationServiceExtensions.cs
+using Calendar.API.Data;
+using Calendar.API.Models.Entities;
+using Calendar.API.Repositories;
+using Calendar.API.Services;
+using Calendar.API.Services.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
+
+namespace Calendar.API.Extensions
 {
-    public class ServiceException : Exception
+    public static class ApplicationServiceExtensions
     {
-        public ServiceException(string message) : base(message)
+        /// <summary>
+        /// 註冊應用程式服務
+        /// </summary>
+        public static IServiceCollection AddApplicationServices(this IServiceCollection services, IConfiguration configuration)
         {
+            // 註冊資料庫上下文
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+
+            // 註冊 Repositories
+            services.AddScoped<ITagRepository, TagRepository>();
+            services.AddScoped<ITodoRepository, TodoRepository>();
+            services.AddScoped<IUserRepository, UserRepository>();
+            services.AddScoped<IUserSettingRepository, UserSettingRepository>();
+            services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
+
+            // 註冊 Services
+            services.AddScoped<ITagService, TagService>();
+            services.AddScoped<ITodoService, TodoService>();
+            services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IUserSettingService, UserSettingService>();
+
+            // 註冊 AutoMapper
+            services.AddAutoMapper(AppDomain.CurrentDomain.GetAssemblies());
+
+            // 註冊密碼哈希工具
+            services.AddSingleton<IPasswordHasher<User>, PasswordHasher<User>>();
+
+            return services;
         }
 
-        public ServiceException(string message, Exception innerException) : base(message, innerException)
+        /// <summary>
+        /// 配置 JWT 認證
+        /// </summary>
+        public static IServiceCollection AddJwtAuthentication(this IServiceCollection services, IConfiguration configuration)
         {
-        }
-    }
+            var jwtSettings = configuration.GetSection("Jwt");
+            var key = Encoding.UTF8.GetBytes(jwtSettings["Key"] ?? throw new InvalidOperationException("JWT Key is not configured"));
 
-    public class EntityNotFoundException : BusinessValidationException
-    {
-        public EntityNotFoundException(string message) : base(message)
-        {
-        }
+            services.AddAuthentication(options =>
+            {
+                options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+            })
+            .AddJwtBearer(options =>
+            {
+                options.TokenValidationParameters = new TokenValidationParameters
+                {
+                    ValidateIssuer = true,
+                    ValidateAudience = true,
+                    ValidateLifetime = true,
+                    ValidateIssuerSigningKey = true,
+                    ValidIssuer = jwtSettings["Issuer"] ?? "DefaultIssuer",
+                    ValidAudience = jwtSettings["Audience"] ?? "DefaultAudience",
+                    IssuerSigningKey = new SymmetricSecurityKey(key),
+                    ClockSkew = TimeSpan.Zero
+                };
+            });
 
-        public EntityNotFoundException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-    }
-
-    public class DuplicateEntityException : BusinessValidationException
-    {
-        public DuplicateEntityException(string message) : base(message)
-        {
-        }
-
-        public DuplicateEntityException(string message, Exception innerException) : base(message, innerException)
-        {
-        }
-    }
-
-    public class BusinessValidationException : Exception
-    {
-        public BusinessValidationException(string message) : base(message)
-        {
+            return services;
         }
 
-        public BusinessValidationException(string message, Exception innerException) : base(message, innerException)
+        /// <summary>
+        /// 配置 CORS 策略
+        /// </summary>
+        public static IServiceCollection AddCorsPolicy(this IServiceCollection services, IConfiguration configuration)
         {
+            services.AddCors(options =>
+            {
+                options.AddPolicy("CorsPolicy", builder =>
+                {
+                    builder.WithOrigins(configuration.GetSection("AllowedOrigins").Get<string[]>() ?? new[] { "*" })
+                           .AllowAnyMethod()
+                           .AllowAnyHeader()
+                           .AllowCredentials();
+                });
+            });
+
+            return services;
         }
     }
 }

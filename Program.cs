@@ -5,6 +5,7 @@ using Calendar.API.Services;
 using Calendar.API.Services.Interfaces;
 using Calendar.API.Mappings;
 using Calendar.API.Repositories;
+using Calendar.API.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,6 +34,15 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // 加入 AutoMapper 服務
 builder.Services.AddAutoMapper(typeof(TodoProfile));
+
+// 註冊應用服務
+builder.Services.AddApplicationServices(builder.Configuration);
+
+// 配置JWT認證
+builder.Services.AddJwtAuthentication(builder.Configuration);
+
+// 配置CORS
+builder.Services.AddCorsPolicy(builder.Configuration);
 
 // 註冊 TodoService
 builder.Services.AddScoped<ITodoService, TodoService>();
@@ -89,7 +99,10 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseHttpsRedirection();
+app.UseCors("CorsPolicy");
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.UseGlobalExceptionHandler(app.Environment);
 
 app.Run();
