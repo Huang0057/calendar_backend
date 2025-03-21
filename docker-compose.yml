@@ -29,6 +29,11 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=${DB_NAME};User Id=${DB_USER};Password=${DB_PASSWORD};TrustServerCertificate=True;    
       - ASPNETCORE_URLS=http://+:80
+      - Jwt__Key=${JWT_KEY}
+      - Jwt__Issuer=${JWT_ISSUER}
+      - Jwt__Audience=${JWT_AUDIENCE}
+      - Jwt__ExpiryInMinutes=${JWT_EXPIRY_MINUTES}
+      - AllowedOrigins__0=http://localhost:3000
     ports:
       - "8080:80"
     depends_on:
